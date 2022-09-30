@@ -1,32 +1,44 @@
-import sys, hashlib, requests
+"""
+An API call is made with the first 5 characters of SHA1 of your password(s),
+which returns a list of matches and their occurrences.
+The full password hash is then checked locally for matches.
+More occurrences means worse password.
+"""
+import hashlib
+import sys
+from typing import List, Tuple
+
+import requests
+from requests.exceptions import RequestException
 
 
-def check_password(password):
+def check_password(password: str) -> Tuple[str, int]:
+    """Compute hash and send API request"""
     hashed = hashlib.sha1(password.encode('utf-8')).hexdigest().upper()
     head, tail = hashed[:5], hashed[5:]
-    url = 'https://api.pwnedpasswords.com/range/' + head
+    url = f'https://api.pwnedpasswords.com/range/{head}'
     resp = requests.get(url)
-    
+
     if resp.status_code != 200:
-        raise Exception('Request error encountered when accessing "{0}".\nCode: {1}'.format(url, resp.status_code))
+        raise RequestException(f'Request error encountered when accessing {url}.\nCode: {resp.status_code}')
 
     hashes = (line.split(':') for line in resp.text.splitlines())
     count = next((int(count) for i, count in hashes if i == tail), 0)
     return hashed, count
 
 
-def main(args):
-    for password in args:
-        password = password.strip()
+def main(passwords: List[str]) -> None:
+    """Check comma separated password(s) against leakd password databases"""
+    for password in passwords:
         try:
-            hashed, count = check_password(password)
+            hashed, count = check_password(password.strip())
         except Exception as err:
-            print('Password "{0}" could not be checked: {1}'.format(password, err))
+            print(f'Password {password} could not be checked: {err}')
         else:
             if count:
-                print('Password "{0}" was found with {1} occurrences (hash: {2})'.format(password, count, hashed))
+                print(f'Password {password} was found with {count} occurrences (hash: {hashed})')
             else:
-                print('Password "{0}" was not found (hash: {1})'.format(password, hashed))
+                print(f'Password {password} was not found (hash: {hashed})')
 
 
 if __name__ == '__main__':
